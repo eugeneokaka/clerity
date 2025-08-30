@@ -1,103 +1,129 @@
-import Image from "next/image";
+"use client";
 
-export default function Home() {
+import { useEffect, useState } from "react";
+import { supabase } from "@/lib/supabaseClient";
+import { useRouter } from "next/navigation"; // For navigation
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent } from "@/components/ui/card";
+
+type Folder = {
+  id: string;
+  name: string;
+  parent_id: string | null;
+  is_public: boolean;
+};
+
+export default function HomePage() {
+  const router = useRouter();
+  const [folders, setFolders] = useState<Folder[]>([]);
+  const [newFolder, setNewFolder] = useState("");
+  const [isPublic, setIsPublic] = useState(false);
+  const [loading, setLoading] = useState(false);
+  const [userId, setUserId] = useState<string | null>(null);
+
+  // Fetch current user
+  useEffect(() => {
+    const fetchUser = async () => {
+      const { data } = await supabase.auth.getUser();
+      setUserId(data.user?.id || null);
+    };
+    fetchUser();
+  }, []);
+
+  // Fetch root folders
+  const fetchFolders = async () => {
+    if (!userId) return;
+
+    const { data, error } = await supabase
+      .from("folders")
+      .select("*")
+      .eq("user_id", userId)
+      .is("parent_id", null); // root folders only
+
+    if (error) console.error("Fetch folders error:", error);
+    else setFolders(data || []);
+  };
+
+  // Create folder
+  const createFolder = async () => {
+    if (!newFolder || !userId) return;
+    setLoading(true);
+
+    const { data, error } = await supabase
+      .from("folders")
+      .insert([
+        {
+          name: newFolder,
+          user_id: userId,
+          parent_id: null, // always root
+          is_public: isPublic,
+        },
+      ])
+      .select()
+      .single();
+
+    if (error) console.error("Create folder error:", error);
+    else if (data) {
+      setFolders((prev) => [...prev, data]);
+      setNewFolder("");
+      setIsPublic(false);
+    }
+
+    setLoading(false);
+  };
+
+  // Navigate to folder page
+  const openFolder = (folder: Folder) => {
+    router.push(`/folders/${folder.id}`);
+  };
+
+  // Initial fetch
+  useEffect(() => {
+    if (userId) fetchFolders();
+  }, [userId]);
+
   return (
-    <div className="font-sans grid grid-rows-[20px_1fr_20px] items-center justify-items-center min-h-screen p-8 pb-20 gap-16 sm:p-20">
-      <main className="flex flex-col gap-[32px] row-start-2 items-center sm:items-start">
-        <Image
-          className="dark:invert"
-          src="/next.svg"
-          alt="Next.js logo"
-          width={180}
-          height={38}
-          priority
-        />
-        <ol className="font-mono list-inside list-decimal text-sm/6 text-center sm:text-left">
-          <li className="mb-2 tracking-[-.01em]">
-            Get started by editing{" "}
-            <code className="bg-black/[.05] dark:bg-white/[.06] font-mono font-semibold px-1 py-0.5 rounded">
-              src/app/page.tsx
-            </code>
-            .
-          </li>
-          <li className="tracking-[-.01em]">
-            Save and see your changes instantly.
-          </li>
-        </ol>
+    <main className="p-6 max-w-3xl mx-auto">
+      <h1 className="text-2xl font-bold mb-4">📂 My Folders</h1>
 
-        <div className="flex gap-4 items-center flex-col sm:flex-row">
-          <a
-            className="rounded-full border border-solid border-transparent transition-colors flex items-center justify-center bg-foreground text-background gap-2 hover:bg-[#383838] dark:hover:bg-[#ccc] font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 sm:w-auto"
-            href="https://vercel.com/new?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
+      <div className="flex gap-2 mb-4 items-center">
+        <Input
+          value={newFolder}
+          onChange={(e) => setNewFolder(e.target.value)}
+          placeholder="New folder name..."
+        />
+        <label className="flex items-center gap-1">
+          <input
+            type="checkbox"
+            checked={isPublic}
+            onChange={(e) => setIsPublic(e.target.checked)}
+          />
+          Public
+        </label>
+        <Button onClick={createFolder} disabled={loading}>
+          {loading ? "Creating..." : "Create"}
+        </Button>
+      </div>
+
+      <div className="grid gap-3">
+        {folders.map((folder) => (
+          <Card
+            key={folder.id}
+            className="cursor-pointer hover:shadow-lg"
+            onClick={() => openFolder(folder)}
           >
-            <Image
-              className="dark:invert"
-              src="/vercel.svg"
-              alt="Vercel logomark"
-              width={20}
-              height={20}
-            />
-            Deploy now
-          </a>
-          <a
-            className="rounded-full border border-solid border-black/[.08] dark:border-white/[.145] transition-colors flex items-center justify-center hover:bg-[#f2f2f2] dark:hover:bg-[#1a1a1a] hover:border-transparent font-medium text-sm sm:text-base h-10 sm:h-12 px-4 sm:px-5 w-full sm:w-auto md:w-[158px]"
-            href="https://nextjs.org/docs?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-            target="_blank"
-            rel="noopener noreferrer"
-          >
-            Read our docs
-          </a>
-        </div>
-      </main>
-      <footer className="row-start-3 flex gap-[24px] flex-wrap items-center justify-center">
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org/learn?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/file.svg"
-            alt="File icon"
-            width={16}
-            height={16}
-          />
-          Learn
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://vercel.com/templates?framework=next.js&utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/window.svg"
-            alt="Window icon"
-            width={16}
-            height={16}
-          />
-          Examples
-        </a>
-        <a
-          className="flex items-center gap-2 hover:underline hover:underline-offset-4"
-          href="https://nextjs.org?utm_source=create-next-app&utm_medium=appdir-template-tw&utm_campaign=create-next-app"
-          target="_blank"
-          rel="noopener noreferrer"
-        >
-          <Image
-            aria-hidden
-            src="/globe.svg"
-            alt="Globe icon"
-            width={16}
-            height={16}
-          />
-          Go to nextjs.org →
-        </a>
-      </footer>
-    </div>
+            <CardContent className="p-4 flex justify-between items-center">
+              <p className="font-medium">{folder.name}</p>
+              {folder.is_public && (
+                <span className="text-sm text-green-600 font-semibold">
+                  Public
+                </span>
+              )}
+            </CardContent>
+          </Card>
+        ))}
+      </div>
+    </main>
   );
 }
