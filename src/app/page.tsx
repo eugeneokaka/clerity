@@ -2,7 +2,7 @@
 
 import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabaseClient";
-import { useRouter } from "next/navigation"; // For navigation
+import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
@@ -12,6 +12,8 @@ type Folder = {
   name: string;
   parent_id: string | null;
   is_public: boolean;
+  user_id: string;
+  created_at: string;
 };
 
 export default function HomePage() {
@@ -21,31 +23,70 @@ export default function HomePage() {
   const [isPublic, setIsPublic] = useState(false);
   const [loading, setLoading] = useState(false);
   const [userId, setUserId] = useState<string | null>(null);
+  const [authLoading, setAuthLoading] = useState(true);
 
-  // Fetch current user
+  // search & filter state
+  const [searchQuery, setSearchQuery] = useState("");
+  const [scope, setScope] = useState<"my" | "public">("my");
+
+  // 🔐 Fetch current user
   useEffect(() => {
     const fetchUser = async () => {
-      const { data } = await supabase.auth.getUser();
-      setUserId(data.user?.id || null);
+      const {
+        data: { user },
+        error,
+      } = await supabase.auth.getUser();
+
+      if (error) console.error("Auth error:", error);
+
+      if (!user) {
+        router.push("/signin"); // 🚨 block unauthenticated users
+      } else {
+        setUserId(user.id);
+      }
+      setAuthLoading(false);
     };
+
     fetchUser();
-  }, []);
+  }, [router]);
 
-  // Fetch root folders
+  // 📂 Fetch folders
   const fetchFolders = async () => {
-    if (!userId) return;
+    if (scope === "my" && !userId) return;
 
-    const { data, error } = await supabase
+    let query = supabase
       .from("folders")
       .select("*")
-      .eq("user_id", userId)
-      .is("parent_id", null); // root folders only
+      .order("created_at", { ascending: false });
 
-    if (error) console.error("Fetch folders error:", error);
-    else setFolders(data || []);
+    if (scope === "my") {
+      if (searchQuery.trim() === "") {
+        // show only top-level if not searching
+        query = query.eq("user_id", userId).is("parent_id", null);
+      } else {
+        // search across ALL my folders + subfolders
+        query = query.eq("user_id", userId);
+      }
+    } else {
+      // 🌍 Public scope
+      query = query.eq("is_public", true);
+    }
+
+    // 🔍 Apply search filter
+    if (searchQuery.trim() !== "") {
+      query = query.ilike("name", `%${searchQuery}%`);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      console.error("Fetch folders error:", error);
+    } else {
+      setFolders(data || []);
+    }
   };
 
-  // Create folder
+  // ➕ Create folder
   const createFolder = async () => {
     if (!newFolder || !userId) return;
     setLoading(true);
@@ -56,16 +97,17 @@ export default function HomePage() {
         {
           name: newFolder,
           user_id: userId,
-          parent_id: null, // always root
+          parent_id: null,
           is_public: isPublic,
         },
       ])
       .select()
       .single();
 
-    if (error) console.error("Create folder error:", error);
-    else if (data) {
-      setFolders((prev) => [...prev, data]);
+    if (error) {
+      console.error("Create folder error:", error);
+    } else if (data) {
+      setFolders((prev) => [data, ...prev]);
       setNewFolder("");
       setIsPublic(false);
     }
@@ -73,39 +115,77 @@ export default function HomePage() {
     setLoading(false);
   };
 
-  // Navigate to folder page
+  // 📂 Navigate to folder page
   const openFolder = (folder: Folder) => {
     router.push(`/folders/${folder.id}`);
   };
 
-  // Initial fetch
+  // 🔁 Fetch whenever filters change
   useEffect(() => {
-    if (userId) fetchFolders();
-  }, [userId]);
+    if (userId || scope === "public") {
+      fetchFolders();
+    }
+  }, [userId, searchQuery, scope]);
+
+  if (authLoading) {
+    return <p className="p-6 text-center">🔐 Checking authentication...</p>;
+  }
 
   return (
     <main className="p-6 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">📂 My Folders</h1>
+      <h1 className="text-2xl font-bold mb-4">
+        {scope === "my" ? "📂 My Folders" : "🌍 Public Folders"}
+      </h1>
 
-      <div className="flex gap-2 mb-4 items-center">
-        <Input
-          value={newFolder}
-          onChange={(e) => setNewFolder(e.target.value)}
-          placeholder="New folder name..."
-        />
-        <label className="flex items-center gap-1">
-          <input
-            type="checkbox"
-            checked={isPublic}
-            onChange={(e) => setIsPublic(e.target.checked)}
-          />
-          Public
-        </label>
-        <Button onClick={createFolder} disabled={loading}>
-          {loading ? "Creating..." : "Create"}
+      {/* scope switcher */}
+      <div className="flex gap-3 mb-6">
+        <Button
+          variant={scope === "my" ? "default" : "outline"}
+          onClick={() => setScope("my")}
+        >
+          My Folders
+        </Button>
+        <Button
+          variant={scope === "public" ? "default" : "outline"}
+          onClick={() => setScope("public")}
+        >
+          Public Folders
         </Button>
       </div>
 
+      {/* create folder form (only my scope) */}
+      {scope === "my" && (
+        <div className="flex gap-2 mb-6 items-center">
+          <Input
+            value={newFolder}
+            onChange={(e) => setNewFolder(e.target.value)}
+            placeholder="New folder name..."
+          />
+          <label className="flex items-center gap-1 text-sm">
+            <input
+              type="checkbox"
+              checked={isPublic}
+              onChange={(e) => setIsPublic(e.target.checked)}
+            />
+            Public
+          </label>
+          <Button onClick={createFolder} disabled={loading}>
+            {loading ? "Creating..." : "Create"}
+          </Button>
+        </div>
+      )}
+
+      {/* search */}
+      <div className="flex gap-3 mb-6 items-center">
+        <Input
+          value={searchQuery}
+          onChange={(e) => setSearchQuery(e.target.value)}
+          placeholder="🔍 Search folders..."
+          className="flex-1"
+        />
+      </div>
+
+      {/* folders list */}
       <div className="grid gap-3">
         {folders.map((folder) => (
           <Card
@@ -123,6 +203,9 @@ export default function HomePage() {
             </CardContent>
           </Card>
         ))}
+        {folders.length === 0 && (
+          <p className="text-gray-500 text-center">No folders found.</p>
+        )}
       </div>
     </main>
   );
