@@ -6,8 +6,9 @@ import { useRouter } from "next/navigation";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent } from "@/components/ui/card";
+import { FolderPlus, Folder, Globe, Search } from "lucide-react"; // icons
 
-type Folder = {
+type FolderType = {
   id: string;
   name: string;
   parent_id: string | null;
@@ -18,7 +19,7 @@ type Folder = {
 
 export default function HomePage() {
   const router = useRouter();
-  const [folders, setFolders] = useState<Folder[]>([]);
+  const [folders, setFolders] = useState<FolderType[]>([]);
   const [newFolder, setNewFolder] = useState("");
   const [isPublic, setIsPublic] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -61,18 +62,14 @@ export default function HomePage() {
 
     if (scope === "my") {
       if (searchQuery.trim() === "") {
-        // show only top-level if not searching
         query = query.eq("user_id", userId).is("parent_id", null);
       } else {
-        // search across ALL my folders + subfolders
         query = query.eq("user_id", userId);
       }
     } else {
-      // 🌍 Public scope
       query = query.eq("is_public", true);
     }
 
-    // 🔍 Apply search filter
     if (searchQuery.trim() !== "") {
       query = query.ilike("name", `%${searchQuery}%`);
     }
@@ -115,12 +112,10 @@ export default function HomePage() {
     setLoading(false);
   };
 
-  // 📂 Navigate to folder page
-  const openFolder = (folder: Folder) => {
+  const openFolder = (folder: FolderType) => {
     router.push(`/folders/${folder.id}`);
   };
 
-  // 🔁 Fetch whenever filters change
   useEffect(() => {
     if (userId || scope === "public") {
       fetchFolders();
@@ -132,79 +127,97 @@ export default function HomePage() {
   }
 
   return (
-    <main className="p-6 max-w-3xl mx-auto">
-      <h1 className="text-2xl font-bold mb-4">
-        {scope === "my" ? "📂 My Folders" : "🌍 Public Folders"}
-      </h1>
-
-      {/* scope switcher */}
-      <div className="flex gap-3 mb-6">
-        <Button
-          variant={scope === "my" ? "default" : "outline"}
-          onClick={() => setScope("my")}
-        >
-          My Folders
-        </Button>
-        <Button
-          variant={scope === "public" ? "default" : "outline"}
-          onClick={() => setScope("public")}
-        >
-          Public Folders
-        </Button>
+    <main className="min-h-screen bg-gradient-to-br from-gray-50 to-gray-100">
+      {/* Hero Section */}
+      <div className="bg-gradient-to-r from-indigo-500 to-purple-600 text-white py-10 px-6 shadow-md">
+        <h1 className="text-3xl font-bold mb-2">AI Study App</h1>
+        <p className="text-sm opacity-90">
+          Organize your notes & folders, upload PDFs, and explore public study
+          resources.
+        </p>
       </div>
 
-      {/* create folder form (only my scope) */}
-      {scope === "my" && (
-        <div className="flex gap-2 mb-6 items-center">
-          <Input
-            value={newFolder}
-            onChange={(e) => setNewFolder(e.target.value)}
-            placeholder="New folder name..."
-          />
-          <label className="flex items-center gap-1 text-sm">
-            <input
-              type="checkbox"
-              checked={isPublic}
-              onChange={(e) => setIsPublic(e.target.checked)}
-            />
-            Public
-          </label>
-          <Button onClick={createFolder} disabled={loading}>
-            {loading ? "Creating..." : "Create"}
+      <div className="max-w-4xl mx-auto p-6">
+        {/* Scope Switcher */}
+        <div className="flex gap-3 mb-6 justify-center">
+          <Button
+            variant={scope === "my" ? "default" : "outline"}
+            onClick={() => setScope("my")}
+          >
+            <Folder className="w-4 h-4 mr-1" /> My Folders
+          </Button>
+          <Button
+            variant={scope === "public" ? "default" : "outline"}
+            onClick={() => setScope("public")}
+          >
+            <Globe className="w-4 h-4 mr-1" /> Public
           </Button>
         </div>
-      )}
 
-      {/* search */}
-      <div className="flex gap-3 mb-6 items-center">
-        <Input
-          value={searchQuery}
-          onChange={(e) => setSearchQuery(e.target.value)}
-          placeholder="🔍 Search folders..."
-          className="flex-1"
-        />
-      </div>
+        {/* Create Folder Form */}
+        {scope === "my" && (
+          <div className="bg-white shadow rounded-xl p-4 mb-6 flex items-center gap-3">
+            <Input
+              value={newFolder}
+              onChange={(e) => setNewFolder(e.target.value)}
+              placeholder="📂 New folder name..."
+              className="flex-1"
+            />
+            <label className="flex items-center gap-1 text-sm whitespace-nowrap">
+              <input
+                type="checkbox"
+                checked={isPublic}
+                onChange={(e) => setIsPublic(e.target.checked)}
+              />
+              Public
+            </label>
+            <Button onClick={createFolder} disabled={loading}>
+              <FolderPlus className="w-4 h-4 mr-1" />
+              {loading ? "Creating..." : "Create"}
+            </Button>
+          </div>
+        )}
 
-      {/* folders list */}
-      <div className="grid gap-3">
-        {folders.map((folder) => (
-          <Card
-            key={folder.id}
-            className="cursor-pointer hover:shadow-lg"
-            onClick={() => openFolder(folder)}
-          >
-            <CardContent className="p-4 flex justify-between items-center">
-              <p className="font-medium">{folder.name}</p>
-              {folder.is_public && (
-                <span className="text-sm text-green-600 font-semibold">
-                  Public
-                </span>
-              )}
-            </CardContent>
-          </Card>
-        ))}
+        {/* Search Bar */}
+        <div className="relative mb-6">
+          <Search className="absolute left-3 top-2.5 w-4 h-4 text-gray-400" />
+          <Input
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            placeholder="Search folders..."
+            className="pl-10"
+          />
+        </div>
+
+        {/* Folder List */}
+        <div className="grid sm:grid-cols-2 gap-4">
+          {folders.map((folder) => (
+            <Card
+              key={folder.id}
+              className="cursor-pointer hover:shadow-lg transition rounded-xl"
+              onClick={() => openFolder(folder)}
+            >
+              <CardContent className="p-5 flex justify-between items-center">
+                <div className="flex items-center gap-2">
+                  <Folder className="w-5 h-5 text-indigo-600" />
+                  <p className="font-medium">{folder.name}</p>
+                </div>
+                {folder.is_public && (
+                  <span className="text-xs px-2 py-1 rounded-full bg-green-100 text-green-700">
+                    Public
+                  </span>
+                )}
+              </CardContent>
+            </Card>
+          ))}
+        </div>
+
+        {/* Empty State */}
         {folders.length === 0 && (
-          <p className="text-gray-500 text-center">No folders found.</p>
+          <div className="text-center text-gray-500 mt-12">
+            <Folder className="w-12 h-12 mx-auto mb-3 opacity-50" />
+            <p>No folders found.</p>
+          </div>
         )}
       </div>
     </main>
