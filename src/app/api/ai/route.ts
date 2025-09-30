@@ -5,7 +5,9 @@ import { GoogleGenerativeAI } from "@google/generative-ai";
 const genAI = new GoogleGenerativeAI(process.env.GOOGLE_GEMINI_API!);
 
 export async function POST(req: Request) {
+  console.log("AI route invoked");
   try {
+    console.log("Received AI request");
     const { prompt, fileUrl } = await req.json();
 
     if (!prompt && !fileUrl) {
@@ -15,7 +17,7 @@ export async function POST(req: Request) {
       );
     }
 
-    const model = genAI.getGenerativeModel({ model: "gemini-1.5-flash" });
+    const model = genAI.getGenerativeModel({ model: "gemini-2.5-flash" });
 
     let result: any;
 
@@ -33,14 +35,18 @@ export async function POST(req: Request) {
         },
       ]);
     } else {
+      console.log("Generating content for prompt:", prompt);
       result = await model.generateContent(
         `Answer in simple, plain English. No bullet points, no technical jargon.\n\n${prompt}`
       );
+      console.log("AI response:", result);
     }
 
     const text = result.response.text();
+    console.log("Generated text:", text);
     return NextResponse.json({ text });
   } catch (error: any) {
+    console.log(error);
     console.error("AI API error:", error);
     return NextResponse.json(
       { error: error.message || "Something went wrong" },
